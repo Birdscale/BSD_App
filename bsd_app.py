@@ -1,6 +1,42 @@
 import streamlit as st
-import db
 from PIL import Image
+import db
+from database import insert_user, authenticate
+
+# Define session state class
+class SessionState:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+# Function to create the signup form
+def signup_form():
+    st.header("User Signup")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Signup", key="signup_button"):  # Add unique key
+        if username and password:
+            if insert_user(username, password):
+                st.success("Signup successful! You can now login.")
+            else:
+                st.error("Failed to signup.")
+        else:
+            st.warning("Please enter both username and password.")
+
+# Function to create the login form
+def login_form():
+    st.header("User Login")
+    username = st.text_input("Username", key="login_username_input")  # Add unique key
+    password = st.text_input("Password", type="password", key="login_password_input")  # Add unique key
+    if st.button("Login", key="login_button"):  # Add unique key
+        if username and password:
+            if authenticate(username, password):
+                st.session_state.logged_in = True  # Set logged_in state to True
+                st.success("Logged in successfully!")
+            else:
+                st.error("Invalid username or password. Please try again.")
+        else:
+            st.warning("Please enter both username and password.")
+
 # Load custom CSS for styling
 def load_custom_css():
     custom_css = """
@@ -12,7 +48,7 @@ def load_custom_css():
         padding: 0;
     }
     .header {
-        background-color: #005792;
+        background-color: red;
         color: white;
         padding: 20px;
         text-align: center;
@@ -32,7 +68,7 @@ def load_custom_css():
         padding: 20px;
     }
     .about-section {
-        background-color: #f0f0f0;
+        background-color: red;
         padding: 20px;
         margin-bottom: 20px;
     }
@@ -93,15 +129,35 @@ def main():
     st.sidebar.markdown('## About Us')
     about_us_content = """
         WHO WE ARE 
-        
+
     Going airborne
     to explore the world
     from the sky.
         """
     st.sidebar.write(about_us_content)
 
+    # Initialize session state
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+
+    # Show authentication buttons if not logged in
+    if not st.session_state.logged_in:
+        show_auth_buttons()
+    else:
+        show_navigation()
+
+# Function to show authentication buttons
+def show_auth_buttons():
+    option = st.selectbox("Create a account", ["Login", "Signup"])
+    if option == "Login":
+        login_form()
+    elif option == "Signup":
+        signup_form()
+
+# Function to show navigation options after successful login
+def show_navigation():
     # Add tabs
-    tabs = ["Create Project", "Upload Images", "Retrieve Images"]
+    tabs = ["Create Project", "Upload Images", "Retrieve Images", "Logout"]  # Added logout option
     current_tab = st.sidebar.radio("Navigation", tabs)
 
     # Render the selected tab
@@ -111,6 +167,10 @@ def main():
         upload_images_tab()
     elif current_tab == "Retrieve Images":
         retrieve_images_tab()
+    elif current_tab == "Logout":
+        st.session_state.logged_in = False  # Set logged_in state to False
+        st.success("Logged out successfully!")
+        show_auth_buttons()
 
 # Create table tab
 def create_table_tab():
@@ -122,6 +182,7 @@ def create_table_tab():
             st.write(result)
         else:
             st.warning("Please enter a Project name.")
+
 # Upload images tab
 def upload_images_tab():
     st.header("Upload Images")
@@ -130,10 +191,14 @@ def upload_images_tab():
     if st.button("Upload Images"):
         if table_name and uploaded_files:
             for file in uploaded_files:
-                filename = file.name
-                image_data = file.read()
-                result = db.upload_image(table_name, filename, image_data)
-                st.write(result)
+                try:
+                    filename = file.name
+                    image_data = file.read()
+                    result = db.upload_image(table_name, filename, image_data)
+                    st.write(result)
+                except Exception as e:
+                    st.error(f"Error uploading image: {e}")
+
 # Retrieve images tab
 def retrieve_images_tab():
     st.header("Retrieve Images")
@@ -147,6 +212,6 @@ def retrieve_images_tab():
         else:
             st.info("No images found for the selected project.")
 
-
 if __name__ == '__main__':
+    db.create_users_table()  # Ensure users table exists
     main()
